@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stardust Clicker</title>
+<style>
+  :root {
+    --bg: #0d0f1e;
+    --panel: #171a33;
+    --panel-2: #20244a;
+    --text: #e8eaff;
+    --muted: #9aa0d0;
+    --accent: #ffd36e;
+    --accent-2: #8f7bff;
+    --ok: #6ee7a8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--text);
+    background: radial-gradient(ellipse at top, #1d2150 0%, var(--bg) 60%);
+    display: flex;
+    justify-content: center;
+    user-select: none;
+  }
+  main {
+    width: 100%;
+    max-width: 960px;
+    padding: 24px 16px 48px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 720px) { main { grid-template-columns: 1fr; } }
+
+  .left { text-align: center; }
+  h1 { margin: 0 0 4px; font-size: 1.6rem; letter-spacing: .02em; }
+  .count { font-size: 2.6rem; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .rate { color: var(--muted); margin-bottom: 20px; }
+
+  .star-wrap { position: relative; display: inline-block; }
+  #star {
+    width: 220px; height: 220px;
+    border: none; background: none; cursor: pointer; padding: 0;
+    filter: drop-shadow(0 0 24px rgba(255, 211, 110, .55));
+    transition: transform .08s ease;
+    animation: spin 30s linear infinite;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #star:active { transform: scale(.92); }
+  #star svg { width: 100%; height: 100%; }
+  @keyframes spin { to { rotate: 360deg; } }
+
+  .floater {
+    position: absolute; pointer-events: none;
+    font-weight: 800; color: var(--accent); font-size: 1.2rem;
+    text-shadow: 0 2px 6px rgba(0,0,0,.6);
+    animation: floatUp .9s ease-out forwards;
+  }
+  .floater.crit { color: #ff8fd6; font-size: 1.6rem; }
+  @keyframes floatUp {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to   { opacity: 0; transform: translate(-50%, -80px); }
+  }
+
+  .stats { margin-top: 20px; color: var(--muted); font-size: .9rem; line-height: 1.6; }
+  .controls { margin-top: 12px; display: flex; gap: 8px; justify-content: center; }
+  .controls button {
+    background: var(--panel); color: var(--muted); border: 1px solid var(--panel-2);
+    border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: .85rem;
+  }
+  .controls button:hover { color: var(--text); }
+
+  .panel { background: var(--panel); border-radius: 14px; padding: 16px; }
+  .panel h2 { margin: 0 0 12px; font-size: 1.1rem; }
+  .panel + .panel { margin-top: 16px; }
+
+  .item {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid transparent; border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px; cursor: pointer; text-align: left; font: inherit;
+    transition: border-color .15s, opacity .15s;
+  }
+  .item:hover:not(:disabled) { border-color: var(--accent-2); }
+  .item:disabled { opacity: .45; cursor: not-allowed; }
+  .item .icon { font-size: 1.6rem; width: 36px; text-align: center; }
+  .item .info { flex: 1; min-width: 0; }
+  .item .name { font-weight: 700; }
+  .item .desc { color: var(--muted); font-size: .8rem; }
+  .item .cost { color: var(--accent); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .item .owned { font-size: 1.3rem; font-weight: 800; color: var(--muted); min-width: 32px; text-align: right; }
+  .item.bought { display: none; }
+
+  .achievements { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ach {
+    font-size: 1.3rem; width: 40px; height: 40px; border-radius: 8px;
+    display: grid; place-items: center; background: var(--panel-2);
+    filter: grayscale(1) opacity(.35);
+  }
+  .ach.got { filter: none; box-shadow: 0 0 0 1px var(--accent) inset; }
+
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(120px);
+    background: var(--panel-2); border: 1px solid var(--accent); color: var(--text);
+    padding: 10px 18px; border-radius: 10px; transition: transform .3s ease; z-index: 10;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  #comet {
+    position: fixed; font-size: 2.4rem; cursor: pointer; z-index: 5; display: none;
+    filter: drop-shadow(0 0 12px #8fd3ff);
+    animation: bob 1s ease-in-out infinite alternate;
+  }
+  @keyframes bob { to { transform: translateY(-10px) rotate(-10deg); } }
+</style>
+</head>
+<body>
+<main>
+  <section class="left">
+    <h1>✨ Stardust Clicker</h1>
+    <div class="count" id="count">0</div>
+    <div class="rate"><span id="rate">0</span> stardust / sec</div>
+
+    <div class="star-wrap" id="starWrap">
+      <button id="star" aria-label="Click the star">
+        <svg viewBox="0 0 100 100">
+          <defs>
+            <radialGradient id="g" cx="50%" cy="45%" r="60%">
+              <stop offset="0%" stop-color="#fff6d5"/>
+              <stop offset="55%" stop-color="#ffd36e"/>
+              <stop offset="100%" stop-color="#ff9f43"/>
+            </radialGradient>
+          </defs>
+          <polygon fill="url(#g)" stroke="#fff3c4" stroke-width="1.5" stroke-linejoin="round"
+            points="50,4 61,37 96,37 68,58 79,92 50,71 21,92 32,58 4,37 39,37"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="stats">
+      Per click: <b id="perClick">1</b> · Crit chance: <b id="crit">0%</b><br>
+      Total clicks: <b id="clicks">0</b> · All-time stardust: <b id="total">0</b>
+    </div>
+    <div class="controls">
+      <button id="saveBtn">Save</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="panel">
+      <h2>Upgrades</h2>
+      <div id="upgrades"></div>
+    </div>
+    <div class="panel">
+      <h2>Generators</h2>
+      <div id="generators"></div>
+    </div>
+    <div class="panel">
+      <h2>Achievements <span id="achCount" style="color:var(--muted);font-weight:400"></span></h2>
+      <div class="achievements" id="achievements"></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<div id="comet" title="Catch the comet!">☄️</div>
+
+<script>
+const SAVE_KEY = 'stardust-clicker-v1';
+
+const GENERATORS = [
+  { id: 'probe',     name: 'Space Probe',      icon: '🛰️', base: 15,      rate: 0.1 },
+  { id: 'telescope', name: 'Telescope',        icon: '🔭', base: 100,     rate: 1 },
+  { id: 'rocket',    name: 'Dust Rocket',      icon: '🚀', base: 1100,    rate: 8 },
+  { id: 'station',   name: 'Orbital Station',  icon: '🛸', base: 12000,   rate: 47 },
+  { id: 'nebula',    name: 'Nebula Farm',      icon: '🌌', base: 130000,  rate: 260 },
+  { id: 'blackhole', name: 'Black Hole Mill',  icon: '🕳️', base: 1.4e6,   rate: 1400 },
+  { id: 'galaxy',    name: 'Galaxy Engine',    icon: '🌀', base: 2e7,     rate: 7800 },
+];
+
+const UPGRADES = [
+  { id: 'glove1',  name: 'Cosmic Gloves',      icon: '🧤', cost: 50,     desc: '+1 per click',              apply: s => s.clickAdd += 1 },
+  { id: 'glove2',  name: 'Gravity Gauntlets',  icon: '🦾', cost: 500,    desc: 'Double click power',        apply: s => s.clickMult *= 2 },
+  { id: 'crit1',   name: 'Lucky Comet Tail',   icon: '🍀', cost: 1000,   desc: '+10% chance of 10× clicks',    apply: s => s.crit += 0.10 },
+  { id: 'probeX',  name: 'Probe Swarm',        icon: '🛰️', cost: 1500,   desc: 'Probes 3× faster',          apply: s => s.genMult.probe *= 3, req: s => s.owned.probe >= 10 },
+  { id: 'scopeX',  name: 'Adaptive Optics',    icon: '🔭', cost: 8000,   desc: 'Telescopes 3× faster',      apply: s => s.genMult.telescope *= 3, req: s => s.owned.telescope >= 10 },
+  { id: 'glove3',  name: 'Pulsar Fingers',     icon: '⚡', cost: 20000,  desc: 'Clicks gain 2% of /sec',    apply: s => s.clickPct += 0.02 },
+  { id: 'rocketX', name: 'Ion Thrusters',      icon: '🚀', cost: 60000,  desc: 'Rockets 3× faster',         apply: s => s.genMult.rocket *= 3, req: s => s.owned.rocket >= 10 },
+  { id: 'crit2',   name: 'Supernova Strike',   icon: '💥', cost: 100000, desc: '+10% crit chance',          apply: s => s.crit += 0.10 },
+  { id: 'all1',    name: 'Dark Matter Lattice',icon: '🔮', cost: 500000, desc: 'All generators +50%',       apply: s => s.globalMult *= 1.5 },
+  { id: 'stationX',name: 'Ring Habitats',      icon: '🛸', cost: 6e5,    desc: 'Stations 3× faster',        apply: s => s.genMult.station *= 3, req: s => s.owned.station >= 10 },
+  { id: 'glove4',  name: 'Quasar Touch',       icon: '🌟', cost: 2e6,    desc: 'Clicks gain +5% of /sec',   apply: s => s.clickPct += 0.05 },
+  { id: 'all2',    name: 'Cosmic Harmony',     icon: '🎼', cost: 2e7,    desc: 'All generators 2×',         apply: s => s.globalMult *= 2 },
+];
+
+const ACHIEVEMENTS = [
+  { id: 'c1',    icon: '👆', name: 'First Spark',      test: s => s.clicks >= 1 },
+  { id: 'c100',  icon: '✋', name: '100 Clicks',        test: s => s.clicks >= 100 },
+  { id: 'c1000', icon: '🙌', name: '1,000 Clicks',      test: s => s.clicks >= 1000 },
+  { id: 't1k',   icon: '🌠', name: '1K Stardust',       test: s => s.total >= 1e3 },
+  { id: 't1m',   icon: '💫', name: '1M Stardust',       test: s => s.total >= 1e6 },
+  { id: 't1b',   icon: '🌞', name: '1B Stardust',       test: s => s.total >= 1e9 },
+  { id: 'r100',  icon: '⏱️', name: '100 per second',    test: s => rate() >= 100 },
+  { id: 'r10k',  icon: '🏎️', name: '10K per second',    test: s => rate() >= 1e4 },
+  { id: 'g50',   icon: '🏭', name: '50 generators',     test: s => Object.values(s.owned).reduce((a, b) => a + b, 0) >= 50 },
+  { id: 'gal',   icon: '🌀', name: 'Galactic',          test: s => s.owned.galaxy >= 1 },
+  { id: 'comet', icon: '☄️', name: 'Comet Catcher',     test: s => s.comets >= 1 },
+  { id: 'up',    icon: '🎓', name: 'Fully Upgraded',    test: s => s.upgrades.length === UPGRADES.length },
+];
+
+function freshState() {
+  return {
+    stardust: 0, total: 0, clicks: 0, comets: 0,
+    owned: Object.fromEntries(GENERATORS.map(g => [g.id, 0])),
+    upgrades: [], achievements: [],
+    boostUntil: 0,
+  };
+}
+
+let state = freshState();
+let mods; // derived from upgrades
+
+function computeMods() {
+  mods = {
+    clickAdd: 1, clickMult: 1, clickPct: 0, crit: 0, globalMult: 1,
+    genMult: Object.fromEntries(GENERATORS.map(g => [g.id, 1])),
+  };
+  for (const id of state.upgrades) UPGRADES.find(u => u.id === id)?.apply(mods);
+}
+
+const boosted = () => Date.now() < state.boostUntil;
+const genCost = g => Math.ceil(g.base * Math.pow(1.15, state.owned[g.id]));
+const genRate = g => g.rate * mods.genMult[g.id] * mods.globalMult;
+function rate() {
+  let r = GENERATORS.reduce((sum, g) => sum + genRate(g) * state.owned[g.id], 0);
+  return boosted() ? r * 7 : r;
+}
+const clickValue = () => (mods.clickAdd * mods.clickMult + rate() * mods.clickPct) * (boosted() ? 7 : 1);
+
+function fmt(n) {
+  if (n < 1000) return n < 10 && n % 1 ? n.toFixed(1) : Math.floor(n).toLocaleString();
+  const units = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc'];
+  const i = Math.min(Math.floor(Math.log10(n) / 3), units.length - 1);
+  return (n / Math.pow(1000, i)).toFixed(2) + units[i];
+}
+
+function gain(n) { state.stardust += n; state.total += n; }
+
+// ---------- Clicking ----------
+const starWrap = document.getElementById('starWrap');
+document.getElementById('star').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  let v = clickValue();
+  const crit = Math.random() < mods.crit;
+  if (crit) v *= 10;
+  gain(v);
+  state.clicks++;
+  const rect = starWrap.getBoundingClientRect();
+  spawnFloater(e.clientX - rect.left, e.clientY - rect.top, '+' + fmt(v) + (crit ? '!' : ''), crit);
+  render();
+});
+
+function spawnFloater(x, y, text, crit) {
+  const el = document.createElement('div');
+  el.className = 'floater' + (crit ? ' crit' : '');
+  el.textContent = text;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  starWrap.appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
+
+// ---------- Shop ----------
+const genEl = document.getElementById('generators');
+const upEl = document.getElementById('upgrades');
+
+for (const g of GENERATORS) {
+  const b = document.createElement('button');
+  b.className = 'item';
+  b.innerHTML = `<span class="icon">${g.icon}</span>
+    <span class="info"><div class="name">${g.name}</div><div class="desc"></div></span>
+    <span class="cost"></span><span class="owned"></span>`;
+  b.onclick = () => {
+    const c = genCost(g);
+    if (state.stardust >= c) { state.stardust -= c; state.owned[g.id]++; render(); }
+  };
+  g.el = b;
+  genEl.appendChild(b);
+}
+
+for (const u of UPGRADES) {
+  const b = document.createElement('button');
+  b.className = 'item';
+  b.innerHTML = `<span class="icon">${u.icon}</span>
+    <span class="info"><div class="name">${u.name}</div><div class="desc">${u.desc}</div></span>
+    <span class="cost">${fmt(u.cost)}</span>`;
+  b.onclick = () => {
+    if (state.stardust >= u.cost && !state.upgrades.includes(u.id)) {
+      state.stardust -= u.cost;
+      state.upgrades.push(u.id);
+      computeMods();
+      toast(`${u.icon} ${u.name} purchased!`);
+      render();
+    }
+  };
+  u.el = b;
+  upEl.appendChild(b);
+}
+
+const achEl = document.getElementById('achievements');
+for (const a of ACHIEVEMENTS) {
+  const d = document.createElement('div');
+  d.className = 'ach';
+  d.textContent = a.icon;
+  d.title = a.name;
+  a.el = d;
+  achEl.appendChild(d);
+}
+
+// ---------- Rendering ----------
+const $ = id => document.getElementById(id);
+function render() {
+  $('count').textContent = fmt(state.stardust);
+  $('rate').textContent = fmt(rate()) + (boosted() ? ' (☄️ 7× boost!)' : '');
+  $('perClick').textContent = fmt(clickValue());
+  $('crit').textContent = Math.round(mods.crit * 100) + '%';
+  $('clicks').textContent = state.clicks.toLocaleString();
+  $('total').textContent = fmt(state.total);
+  document.title = fmt(state.stardust) + ' stardust · Stardust Clicker';
+
+  GENERATORS.forEach((g, i) => {
+    const prevOwned = i === 0 || state.owned[GENERATORS[i - 1].id] > 0 || state.owned[g.id] > 0;
+    g.el.style.display = prevOwned ? '' : 'none';
+    g.el.querySelector('.desc').textContent = `${fmt(genRate(g))}/sec each`;
+    g.el.querySelector('.cost').textContent = fmt(genCost(g));
+    g.el.querySelector('.owned').textContent = state.owned[g.id];
+    g.el.disabled = state.stardust < genCost(g);
+  });
+
+  let shown = 0;
+  for (const u of UPGRADES) {
+    const have = state.upgrades.includes(u.id);
+    const unlocked = !u.req || u.req(state);
+    const visible = !have && unlocked && shown < 5;
+    u.el.style.display = visible ? '' : 'none';
+    if (visible) shown++;
+    u.el.disabled = state.stardust < u.cost;
+  }
+
+  for (const a of ACHIEVEMENTS) a.el.classList.toggle('got', state.achievements.includes(a.id));
+  $('achCount').textContent = `${state.achievements.length}/${ACHIEVEMENTS.length}`;
+}
+
+function checkAchievements() {
+  for (const a of ACHIEVEMENTS) {
+    if (!state.achievements.includes(a.id) && a.test(state)) {
+      state.achievements.push(a.id);
+      toast(`🏆 Achievement: ${a.name}`);
+    }
+  }
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---------- Comets (random bonus) ----------
+const comet = $('comet');
+function spawnComet() {
+  comet.style.left = (10 + Math.random() * 75) + 'vw';
+  comet.style.top = (10 + Math.random() * 70) + 'vh';
+  comet.style.display = 'block';
+  setTimeout(() => { comet.style.display = 'none'; }, 8000);
+}
+comet.addEventListener('pointerdown', () => {
+  comet.style.display = 'none';
+  state.comets++;
+  if (Math.random() < 0.5) {
+    state.boostUntil = Date.now() + 20000;
+    toast('☄️ Comet boost! 7× production for 20 seconds');
+  } else {
+    const bonus = Math.max(50, rate() * 60, state.stardust * 0.1);
+    gain(bonus);
+    toast(`☄️ Comet shower! +${fmt(bonus)} stardust`);
+  }
+  render();
+});
+(function scheduleComet() {
+  setTimeout(() => { spawnComet(); scheduleComet(); }, 45000 + Math.random() * 75000);
+})();
+
+// ---------- Save / load ----------
+function save(silent) {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ ...state, savedAt: Date.now() }));
+    if (!silent) toast('💾 Game saved');
+  } catch (e) {}
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    state = { ...freshState(), ...data, owned: { ...freshState().owned, ...data.owned } };
+    computeMods();
+    // Offline progress: half rate, capped at 8 hours
+    const away = Math.min((Date.now() - (data.savedAt || Date.now())) / 1000, 8 * 3600);
+    const earned = rate() * away * 0.5;
+    if (earned > 1) {
+      gain(earned);
+      setTimeout(() => toast(`🌙 While you were away: +${fmt(earned)} stardust`), 300);
+    }
+  } catch (e) {}
+}
+
+$('saveBtn').onclick = () => save(false);
+$('resetBtn').onclick = () => {
+  if (confirm('Reset all progress? This cannot be undone.')) {
+    state = freshState();
+    computeMods();
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    render();
+  }
+};
+window.addEventListener('beforeunload', () => save(true));
+
+// ---------- Main loop ----------
+computeMods();
+load();
+render();
+
+let last = Date.now();
+setInterval(() => {
+  const now = Date.now();
+  gain(rate() * (now - last) / 1000); // uses wall-clock time, so background tabs keep earning
+  last = now;
+  render();
+}, 100);
+
+setInterval(checkAchievements, 500);
+setInterval(() => save(true), 15000);
+</script>
+</body>
+</html>
