@@ -44,6 +44,7 @@
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
+    position: fixed; inset: 0; overflow: hidden;
     background: var(--bg);
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -65,8 +66,9 @@
   button:disabled { opacity: .5; cursor: default; }
 
   header {
+    flex-shrink: 0; position: relative; z-index: 2;
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    padding: 10px 16px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
   }
@@ -102,6 +104,7 @@
 
   /* Stopwatch */
   footer {
+    flex-shrink: 0; position: relative; z-index: 2;
     border-top: 1px solid var(--border);
     background: var(--surface);
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
@@ -157,9 +160,14 @@
   let words = [];      // {el, norm}
   let pos = 0;         // index of next unread word
 
-  const norm = s => s.toLowerCase()
-    .replace(/[’']/g, "")
-    .replace(/[^\p{L}\p{N}]+/gu, "");
+  // Speech recognition may say "one" where the script says "1" (or the reverse).
+  const NUMS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten",
+    "eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen","twenty"];
+  const norm = s => {
+    const w = s.toLowerCase().replace(/[’']/g, "").replace(/[^\p{L}\p{N}]+/gu, "");
+    const n = NUMS.indexOf(w);
+    return n >= 0 ? String(n) : w;
+  };
 
   $("scriptInput").value = store.get("script") || "";
   const savedSize = store.get("fontSize");
