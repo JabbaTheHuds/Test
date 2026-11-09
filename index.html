@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cookie Clicker Lite</title>
+<style>
+  :root { --bg:#1b1d2a; --card:#262a3d; --text:#f2f2f7; --accent:#ffb347; --muted:#9aa0b8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .card { background:var(--card); border-radius:16px; padding:24px; width:100%; max-width:480px; box-shadow:0 10px 30px rgba(0,0,0,.4); text-align:center; }
+  h1 { margin:0 0 8px; font-size:1.6rem; }
+  input { font-size:1.4rem; padding:10px; width:160px; text-align:center; border-radius:8px; border:2px solid var(--muted); background:#151722; color:var(--text); letter-spacing:6px; }
+  button { font:inherit; cursor:pointer; border:none; border-radius:8px; padding:10px 16px; background:var(--accent); color:#222; font-weight:600; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  .error { color:#ff6b6b; min-height:1.2em; margin-top:8px; }
+  #game { display:none; }
+  #score { font-size:2.4rem; font-weight:700; margin:8px 0 0; }
+  #cps { color:var(--muted); margin-bottom:12px; }
+  #clicker { font-size:6rem; background:none; padding:0; transition:transform .05s; user-select:none; }
+  #clicker:active { transform:scale(.9); }
+  .shop { display:grid; gap:8px; margin-top:16px; text-align:left; }
+  .item { display:flex; justify-content:space-between; align-items:center; background:#1f2233; padding:10px 12px; border-radius:8px; }
+  .item small { color:var(--muted); display:block; }
+  .float { position:fixed; pointer-events:none; font-weight:700; color:var(--accent); animation:up .8s ease-out forwards; }
+  @keyframes up { to { transform:translateY(-60px); opacity:0; } }
+  .row { display:flex; gap:8px; justify-content:center; margin-top:16px; }
+  .secondary { background:#3a3f5c; color:var(--text); }
+</style>
+</head>
+<body>
+
+<div class="card" id="lock">
+  <h1>🔒 Enter Password</h1>
+  <p style="color:var(--muted)">Type the 4-digit code to play.</p>
+  <form id="lockForm">
+    <input id="pw" type="password" inputmode="numeric" maxlength="4" autocomplete="off" autofocus>
+    <div style="margin-top:12px"><button type="submit">Unlock</button></div>
+    <div class="error" id="err"></div>
+  </form>
+</div>
+
+<div class="card" id="game">
+  <h1>Cookie Clicker Lite</h1>
+  <div id="score">0</div>
+  <div id="cps">0 per second</div>
+  <button id="clicker" aria-label="Click the cookie">🍪</button>
+  <div class="shop" id="shop"></div>
+  <div class="row">
+    <button class="secondary" id="reset">Reset</button>
+    <button class="secondary" id="lockBtn">Lock</button>
+  </div>
+</div>
+
+<script>
+// NOTE: a password check in client-side code is only a casual lock —
+// anyone who views the page source can find it.
+const PASSWORD = "0316";
+
+const upgrades = [
+  { id:"cursor",  name:"Cursor",  emoji:"👆", base:15,    click:1, cps:0   },
+  { id:"grandma", name:"Grandma", emoji:"👵", base:100,   click:0, cps:1   },
+  { id:"farm",    name:"Farm",    emoji:"🌾", base:1100,  click:0, cps:8   },
+  { id:"mine",    name:"Mine",    emoji:"⛏️", base:12000, click:0, cps:47  },
+  { id:"factory", name:"Factory", emoji:"🏭", base:130000,click:0, cps:260 },
+];
+
+let state = load();
+
+function load() {
+  try { const s = JSON.parse(localStorage.getItem("clickerSave")); if (s) return s; } catch {}
+  return { cookies:0, owned:{} };
+}
+function save() { try { localStorage.setItem("clickerSave", JSON.stringify(state)); } catch {} }
+
+const count = id => state.owned[id] || 0;
+const cost  = u => Math.ceil(u.base * Math.pow(1.15, count(u.id)));
+const perClick = () => 1 + upgrades.reduce((s,u) => s + u.click * count(u.id), 0);
+const perSec   = () => upgrades.reduce((s,u) => s + u.cps * count(u.id), 0);
+const fmt = n => n >= 1e6 ? (n/1e6).toFixed(2)+"M" : n >= 1e3 ? (n/1e3).toFixed(1)+"K" : Math.floor(n).toString();
+
+function render() {
+  document.getElementById("score").textContent = fmt(state.cookies) + " 🍪";
+  document.getElementById("cps").textContent = fmt(perSec()) + " per second · " + perClick() + " per click";
+  const shop = document.getElementById("shop");
+  if (!shop.children.length) {
+    shop.innerHTML = upgrades.map(u => `
+      <div class="item">
+        <div>${u.emoji} <b>${u.name}</b> ×<span id="n-${u.id}"></span>
+          <small>${u.click ? "+"+u.click+" per click" : "+"+u.cps+" per second"}</small></div>
+        <button data-id="${u.id}" id="b-${u.id}"></button>
+      </div>`).join("");
+  }
+  for (const u of upgrades) {
+    document.getElementById("n-"+u.id).textContent = count(u.id);
+    const b = document.getElementById("b-"+u.id);
+    b.textContent = fmt(cost(u));
+    b.disabled = state.cookies < cost(u);
+  }
+}
+
+document.getElementById("shop").addEventListener("click", e => {
+  const id = e.target.dataset.id; if (!id) return;
+  const u = upgrades.find(x => x.id === id);
+  if (state.cookies >= cost(u)) { state.cookies -= cost(u); state.owned[id] = count(id) + 1; save(); render(); }
+});
+
+document.getElementById("clicker").addEventListener("click", e => {
+  const gain = perClick();
+  state.cookies += gain; render();
+  const f = document.createElement("div");
+  f.className = "float"; f.textContent = "+" + gain;
+  f.style.left = e.clientX + "px"; f.style.top = e.clientY + "px";
+  document.body.appendChild(f); setTimeout(() => f.remove(), 800);
+});
+
+document.getElementById("reset").addEventListener("click", () => {
+  if (confirm("Reset all progress?")) { state = { cookies:0, owned:{} }; save(); render(); }
+});
+
+function startGame() {
+  document.getElementById("lock").style.display = "none";
+  document.getElementById("game").style.display = "block";
+  render();
+}
+
+document.getElementById("lockForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const pw = document.getElementById("pw");
+  if (pw.value === PASSWORD) { sessionStorage.setItem("unlocked","1"); startGame(); }
+  else { document.getElementById("err").textContent = "Wrong password"; pw.value = ""; }
+});
+
+document.getElementById("lockBtn").addEventListener("click", () => {
+  sessionStorage.removeItem("unlocked");
+  document.getElementById("game").style.display = "none";
+  document.getElementById("lock").style.display = "block";
+});
+
+try { if (sessionStorage.getItem("unlocked") === "1") startGame(); } catch {}
+
+setInterval(() => { state.cookies += perSec() / 10; render(); }, 100);
+setInterval(save, 5000);
+</script>
+</body>
+</html>
